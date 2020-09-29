@@ -1,7 +1,7 @@
 import random
-
 from argparse import ArgumentParser
 from pathlib import Path
+
 from tokenizers import ByteLevelBPETokenizer
 
 
@@ -34,11 +34,13 @@ def main(args):
     tokenizer = ByteLevelBPETokenizer(add_prefix_space=False)
 
     # Customize training
-    tokenizer.train(files=str(sample_path),
-                    vocab_size=args.vocab_size,
-                    min_frequency=args.min_freq,
-                    show_progress=True,
-                    special_tokens=["<unk>", "<s>", "</s>", "<pad>", "<mask>"])
+    tokenizer.train(
+        files=str(sample_path),
+        vocab_size=args.vocab_size,
+        min_frequency=args.min_freq,
+        show_progress=True,
+        special_tokens=["<unk>", "<s>", "</s>", "<pad>", "<mask>"],
+    )
     tokenizer.save_model(directory=str(tokenizers_dir))
 
 
@@ -49,4 +51,3 @@ if __name__ == "__main__":
     parser.add_argument("--min_freq", default=5, type=int)
     args = parser.parse_args()
     main(args)
-
