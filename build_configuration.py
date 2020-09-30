@@ -1,11 +1,10 @@
-import tqdm
 import random
 from argparse import ArgumentParser
 from pathlib import Path
 
-from transformers import BartTokenizer
-from transformers import BartModel
-from transformers import BartConfig
+import tqdm
+from transformers import BartConfig, BartModel, BartTokenizer
+
 
 def main(args):
 
@@ -18,9 +17,10 @@ def main(args):
 
     bart_config.save_pretrained(args.config_path)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument('--tokenizer_path', default='tokenizers', type=str)
-    parser.add_argument('--config_path', default='kobart', type=str)
+    parser.add_argument("--tokenizer_path", default="tokenizers", type=str)
+    parser.add_argument("--config_path", default="kobart", type=str)
     args = parser.parse_args()
     main(args)

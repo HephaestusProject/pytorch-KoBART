@@ -3,36 +3,37 @@
     To implement code for data pipeline. (e.g. custom class subclassing torch.utils.data.Dataset)
 """
 
-import os
-import h5py
 import copy
-import tqdm
-import torch
-
-import numpy as np
-import pytorch_lightning as pl
-
+import os
 from argparse import ArgumentParser
 from pathlib import Path
+
+import h5py
+import numpy as np
+import pytorch_lightning as pl
+import torch
+import tqdm
 from transformers import BartTokenizer
 
-class BartDataset(torch.utils.data.Dataset):
 
+class BartDataset(torch.utils.data.Dataset):
     def __init__(self, h5py_path, tokenizer):
         super().__init__()
 
-        self.h5py = h5py.File(h5py_path, 'r')
+        self.h5py = h5py.File(h5py_path, "r")
         self.tokenizer = tokenizer
-        self.max_length = np.array(self.h5py.get(f'0/max_length'))
+        self.max_length = np.array(self.h5py.get(f"0/max_length"))
 
     def __getitem__(self, idx):
-        encode = np.array(self.h5py.get(f'{idx}/encode'))
-        masked_encode = np.array(self.h5py.get(f'{idx}/mask_encode'))
+        encode = np.array(self.h5py.get(f"{idx}/encode"))
+        masked_encode = np.array(self.h5py.get(f"{idx}/mask_encode"))
 
         padded_encode, padded_attention_mask = self.padding(
-                encode=encode, max_length=self.max_length)
+            encode=encode, max_length=self.max_length
+        )
         padded_masked_encode, _ = self.padding(
-                encode=masked_encode, max_length=self.max_length)
+            encode=masked_encode, max_length=self.max_length
+        )
 
         padded_encode = torch.as_tensor(padded_encode, dtype=torch.long)
         padded_attention_mask = torch.as_tensor(padded_attention_mask, dtype=torch.bool)
@@ -54,8 +55,8 @@ class BartDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.h5py)
 
-class ConcatDataset(torch.utils.data.Dataset):
 
+class ConcatDataset(torch.utils.data.Dataset):
     def __init__(self, h5py_paths, tokenizer):
 
         self.datasets = [BartDataset(h5py_path, tokenizer) for h5py_path in h5py_paths]
@@ -75,8 +76,8 @@ class ConcatDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.concat_dataset)
 
-class BartDataModule(pl.LightningDataModule):
 
+class BartDataModule(pl.LightningDataModule):
     def __init__(self, h5py_paths, batch_size, num_workers, tokenizer):
 
         self.batch_size = batch_size
@@ -85,21 +86,19 @@ class BartDataModule(pl.LightningDataModule):
         self.tokenizer = tokenizer
 
     def setup(self, stage=None):
-        ConcatDataset(
-                htpy_paths=self.h5py_paths,
-                tokenizer=self.tokenizer)
+        ConcatDataset(htpy_paths=self.h5py_paths, tokenizer=self.tokenizer)
 
     def train_dataloader(self):
-        dataset = ConcatDataset(               
-                h5py_paths=self.h5py_paths,
-                tokenizer=self.tokenizer)
+        dataset = ConcatDataset(h5py_paths=self.h5py_paths, tokenizer=self.tokenizer)
         dataloader = torch.utils.data.DataLoader(
-                dataset=dataset,
-                batch_size=self.batch_size,
-                num_workers=self.num_workers,
-                shuffle=False)
+            dataset=dataset,
+            batch_size=self.batch_size,
+            num_workers=self.num_workers,
+            shuffle=False,
+        )
 
         return dataloader
+
 
 def main(args):
 
@@ -113,14 +112,12 @@ def main(args):
     for roots, dirs, files in os.walk(comment_dir):
         for fname in files:
             _, ext = os.path.splitext(fname)
-            if ext == '.h5':
+            if ext == ".h5":
                 h5py_files.append(os.path.join(roots, fname))
 
     dm = BartDataModule(
-            h5py_paths=h5py_files,
-            batch_size=1,
-            num_workers=16,
-            tokenizer=tokenizer)
+        h5py_paths=h5py_files, batch_size=1, num_workers=16, tokenizer=tokenizer
+    )
 
     train_loader = dm.train_dataloader()
     for input_ids, attention_mask, labels in train_loader:
@@ -131,9 +128,10 @@ def main(args):
         print(tokenizer.decode(input_ids))
         print(tokenizer.decode(labels))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
 
     parser = ArgumentParser()
-    parser.add_argument('--tokenizer_path', default='tokenizers', type=str)
+    parser.add_argument("--tokenizer_path", default="tokenizers", type=str)
     args = parser.parse_args()
     main(args)
