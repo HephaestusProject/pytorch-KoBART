@@ -80,9 +80,6 @@ class MakeBartMLMDataset:
                 print(f"read lines ... {len(lines)}, {time.time() - s}")
                 s = time.time()
 
-            if len(lines) == 10000:
-                break
-
         print(f"read lines ... {len(lines)}, {time.time() - s}")
         return lines
 
