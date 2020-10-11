@@ -41,3 +41,9 @@ ARG PASSWD
 RUN echo user:${PASSWD:-hephaestus} | sudo chpasswd
 RUN sudo sed -i 's_/usr/lib/openssh/sftp-server_internal-sftp_g' /etc/ssh/sshd_config
 RUN echo "sudo service ssh start" > /home/user/.bashrc
+
+
+# pyenv 추가 설정
+RUN echo 'export PYENV_ROOT="$HOME/.pyenv"' >> ~/.bashrc
+RUN echo 'export PATH="$PYENV_ROOT/bin:$PATH"' >> ~/.bashrc
+RUN echo 'eval "$(pyenv init -)"' >> ~/.bashrc
