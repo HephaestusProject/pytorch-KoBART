@@ -28,11 +28,12 @@ def get_masking_index(line, tokenizer, mask_ratio):
 
 def make_masked_index(source_io, tokenizer, mask_ratio):
 
-    N = 10
+    N = 10000
     num_cpu = 8
     s = time.time()
     lines = []
     masked_indexes = []
+    pool = multiprocessing.Pool(num_cpu)
     for step, line in enumerate(source_io):
         line = line.replace('\n', '')
         lines.append([
@@ -40,14 +41,12 @@ def make_masked_index(source_io, tokenizer, mask_ratio):
             tokenizer, mask_ratio])
 
         if len(lines) == N:
-            pool = multiprocessing.Pool(num_cpu)
             masked_index = pool.map(map_wrapper, lines)
             masked_indexes.extend(masked_index)
             print(f'make masked index ... {step} ... {time.time() - s}')
             lines = []
             s = time.time()
 
-    pool = multiprocessing.Pool(num_cpu)
     masked_index = pool.map(map_wrapper, lines)
     masked_indexes.extend(masked_index)
 
