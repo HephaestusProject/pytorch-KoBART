@@ -13,64 +13,90 @@ import numpy as np
 import pytorch_lightning as pl
 import torch
 import tqdm
+import json
+
 from transformers import BartTokenizer
 
+class BartDataset(torch.utils.data.IterableDataset):
 
-class BartDataset(torch.utils.data.Dataset):
+    def __init__(self, source_path, mask_path, tokenizer):
 
-    def __init__(self, dataset_path, tokenizer):
-
-        self.hf = h5py.File(dataset_path, 'r')
-        self.max_length = np.array(self.hf.get('max_length'))
-        self.data_num = np.array(self.hf.get('data_num'))
+        self.source_path = source_path
+        self.mask_path = mask_path
         self.tokenizer = tokenizer
 
-    def __getitem__(self, idx):
-        encode = np.array(self.hf.get(f'{idx}/encode'))
-        masked_encode = np.array(self.hf.get(f'{idx}/mask_encode'))
+    def line_mapper(self, line, mask):
+        line = line.replace('\n', '')
+        encode = self.tokenizer.encode(line)
+        masked_encode = copy.deepcopy(encode)
+        for m in mask:
+            masked_encode[m] = self.tokenizer.mask_token_id
 
-        print(encode)
-        print(masked_encode)
-        padded_encode, padded_attention_mask = self.padding(encode)
-        padded_masked_encode, _ = self.padding(masked_encode)
+        attention_mask = [1] * len(masked_encode)
 
-        padded_encode = torch.as_tensor(padded_encode, dtype=torch.long)
-        padded_attention_mask = torch.as_tensor(padded_attention_mask, dtype=torch.bool)
-        padded_masked_encode = torch.as_tensor(padded_masked_encode, dtype=torch.long)
-        return padded_masked_encode, padded_attention_mask, padded_encode
+        masked_encode = torch.as_tensor(masked_encode, dtype=torch.long)
+        encode = torch.as_tensor(encode, dtype=torch.long)
+        attention_mask = torch.as_tensor(attention_mask, dtype=torch.long)
 
-    def padding(self, encode):
-        encode = list(encode)
-        diff_length = self.max_length - len(encode)
-        attention_mask = [1] * len(encode) + [0] * diff_length
-        
-        append_encode = [self.tokenizer.pad_token_id] * diff_length
-        encode.extend(append_encode)
-        return encode, attention_mask
+        return masked_encode, attention_mask, encode
 
-    def __len__(self):
-        return self.data_num
+    def __iter__(self):
+        source_iter = open(self.source_path, 'r', encoding='utf-8')
+
+        mask_data = open(self.mask_path, 'r')
+        mask_iter = json.load(mask_data)
+
+        mapped_source_iter = map(self.line_mapper, source_iter, mask_iter)
+
+        return mapped_source_iter
 
 class BartDataModule(pl.LightningDataModule):
 
-    def __init__(self, dataset_path, batch_size, num_workers, tokenizer):
+    def __init__(self, source_path, mask_path, tokenizer, batch_size, num_workers):
 
         self.batch_size = batch_size
         self.num_workers = num_workers
-        self.dataset_path = dataset_path
+        self.source_path = source_path
+        self.mask_path = mask_path
         self.tokenizer = tokenizer
 
     def setup(self, stage=None):
-        BartDataset(self.dataset_path, self.tokenizer)
+        BartDataset(
+                source_path=self.source_path,
+                mask_path=self.mask_path,
+                tokenizer=self.tokenizer)
+
+    def collate_fn(self, data):
+        
+        def merge(sequence, pad_num):
+            lengths = [len(seq) for seq in sequence]
+            padded_seqs = torch.ones(len(sequence), max(lengths)).long()
+            padded_seqs = padded_seqs * pad_num    
+            for i, seq in enumerate(sequence):
+                end = lengths[i]
+                padded_seqs[i, :end] = seq[:end]
+            return padded_seqs
+
+        masked_encode, attention_mask, encode = zip(*data)
+
+        masked_encode = merge(masked_encode, self.tokenizer.pad_token_id)
+        encode = merge(encode, self.tokenizer.pad_token_id)
+        attention_mask = merge(attention_mask, pad_num=0)
+
+        return masked_encode, attention_mask, encode
 
     def train_dataloader(self):
         dataset = BartDataset(
-                self.dataset_path, self.tokenizer)
+                source_path=self.source_path,
+                mask_path=self.mask_path,
+                tokenizer=self.tokenizer)
+
         dataloader = torch.utils.data.DataLoader(
                 dataset=dataset,
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
-                shuffle=False)
+                collate_fn=self.collate_fn)
+
         return dataloader
 
 def main(args):
@@ -81,23 +107,34 @@ def main(args):
     corpus_dir = proj_dir / "corpus"
     comment_dir = corpus_dir / "comment"
 
-    h5py_files = comment_dir / "dataset.h5py"
+    source_path = comment_dir / args.corpus
+    mask_path = comment_dir / args.mask_path
 
-    dm = BartDataModule(h5py_files, 1, 1, tokenizer)
-    train_loader = dm.train_dataloader()
+    dm = BartDataModule(
+            source_path=source_path,
+            mask_path=mask_path,
+            tokenizer=tokenizer,
+            batch_size=3,
+            num_workers=1)
 
-    for input_ids, attention_mask, labels in train_loader:
+    data_loader = dm.train_dataloader()
 
-        input_ids = input_ids[0].detach().cpu().numpy()
-        labels = labels[0].detach().cpu().numpy()
+    for masked_encode, attention_mask, encode in data_loader:
+        masked_encode = masked_encode.detach().cpu().numpy()
+        encode = encode.detach().cpu().numpy()
 
-        print(tokenizer.decode(input_ids))
-        print(tokenizer.decode(labels))
-
+        for m, e in zip(masked_encode, encode):
+            print(tokenizer.decode(m))
+            print(tokenizer.decode(e))
+            print(attention_mask)
 
 if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument("--tokenizer_path", default="tokenizers", type=str)
+    # parser.add_argument("--corpus", default="20190101_20200611_v2.txt", type=str)
+    parser.add_argument("--corpus", default="test.txt", type=str)
+    parser.add_argument("--mask_path", default="dataset.json", type=str)
+
     args = parser.parse_args()
     main(args)
