@@ -69,6 +69,36 @@ def write_dataset(dataset_path, lines):
 
     print(f"write all dataset into h5 format...{index} / {len(lines)}, {time.time() - t}")
 
+def read_write_data(source_io, repeat, dataset_path, tokenizer, mask_ratio):
+    
+    hf = h5py.File(dataset_path, 'w')
+    t = time.time()
+    s = time.time()
+    max_length = 0
+    data_num = []
+    for step, line in enumerate(source_io):
+        token, masked_token, index = masking_dataset(
+                line=line, index=step, dataset_path=dataset_path,
+                tokenizer=tokenizer, mask_ratio=mask_ratio)
+
+        if max_length <= len(token):
+            max_length = len(token)
+        
+        hf.create_dataset(f'{index}/encode', data=token)
+        hf.create_dataset(f'{index}/mask_encode', data=masked_token)
+        data_num.append(None)
+
+        if len(data_num) % 1000 == 0:
+            print(f"write dataset into h5 format...{len(data_num)}, {time.time() - s}")
+            s = time.time()
+
+        if len(data_num) == 3000:
+            break
+
+    hf.create_dataset('data_num', data=len(data_num))
+    hf.create_dataset('max_length', data=max_length)
+    print(f"write dataset into h5 format...{len(data_num)}, {time.time() - t}")
+
 def main(args):
 
     tokenizer = BartTokenizer.from_pretrained(args.tokenizer_path)
@@ -80,13 +110,16 @@ def main(args):
     dataset_path = comment_dir / "dataset.h5py"
 
     source_io = open(source_path, "r", encoding="utf-8")
-    lines = read_txt_file(source_io, args.repeat, dataset_path, tokenizer, args.mask_ratio)
-
-    write_dataset(dataset_path, lines)
+    read_write_data(
+            source_io=source_io,
+            repeat=args.repeat,
+            dataset_path=dataset_path,
+            tokenizer=tokenizer,
+            mask_ratio=args.mask_ratio)
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--repeat", default=1, type=int)
+    parser.add_argument("--repeat", default=2, type=int)
     parser.add_argument("--mask_ratio", default=0.15, type=float)
     parser.add_argument("--tokenizer_path", default="tokenizers", type=str)
     args = parser.parse_args()
