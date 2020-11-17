@@ -9,11 +9,12 @@ from transformers import BartConfig, BartModel, BartTokenizer
 def main(args):
 
     tokenizer = BartTokenizer.from_pretrained(args.tokenizer_path)
-    bart_config = BartConfig()
+    bart_config = BartConfig.from_pretrained('facebook/bart-base')
     bart_config.vocab_size = len(tokenizer)
     bart_config.eos_token_id = tokenizer.eos_token_id
     bart_config.bos_token_id = tokenizer.bos_token_id
     bart_config.pad_token_id = tokenizer.pad_token_id
+    bart_config.mask_token_id = tokenizer.mask_token_id
 
     bart_config.save_pretrained(args.config_path)
 

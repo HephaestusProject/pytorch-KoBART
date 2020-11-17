@@ -95,7 +95,8 @@ class BartDataModule(pl.LightningDataModule):
                 dataset=dataset,
                 batch_size=self.batch_size,
                 num_workers=self.num_workers,
-                collate_fn=self.collate_fn)
+                collate_fn=self.collate_fn,
+                drop_last=True)
 
         return dataloader
 
@@ -138,3 +139,4 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(args)
+
